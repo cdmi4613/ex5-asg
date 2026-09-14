@@ -1,0 +1,63 @@
+# 워크플로우 이름
+name: GitOps CI Pipeline
+
+# main 브랜치에 push되면 GitHub Actions 실행
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  build-and-update:
+    runs-on: ubuntu-latest
+
+    steps:
+      # GitHub Repository의 파일을 Actions 실행 환경으로 가져오기
+      - name: 소스코드 가져오기
+        uses: actions/checkout@v4
+
+      # GitHub Actions가 AWS 명령어를 사용할 수 있도록 AWS 인증
+      - name: AWS 자격 증명 설정
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # ECR에 로그인
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ECR에 Docker 이미지 빌드 및 푸시
+      - name: Build and push Docker image to ECR
+        env:
+          # ECR_REGISTRY: 925047940866.dkr.ecr.ap-northeast-1.amazonaws.com
+          # ECR_REPOSITORY: std01-nginx
+          IMAGE_TAG: 1.31.3-cd
+        run: |
+          docker build --no-cache -t 925047940866.dkr.ecr.ap-northeast-1.amazonaws.com/std01-nginx:$IMAGE_TAG ./nginx
+          docker build --no-cache -t 925047940866.dkr.ecr.ap-northeast-1.amazonaws.com/std01-nginx:latest ./nginx
+
+          docker push 925047940866.dkr.ecr.ap-northeast-1.amazonaws.com/std01-nginx:$IMAGE_TAG
+          docker push 925047940866.dkr.ecr.ap-northeast-1.amazonaws.com/std01-nginx:latest
+
+      # SSM을 통해 Private EC2에 Docker 배포 명령 전달
+      - name: Private EC2에 Docker 컨테이너 배포
+        env:
+          # ECR_REGISTRY: 925047940866.dkr.ecr.ap-northeast-1.amazonaws.com
+          # ECR_REPOSITORY: std01-nginx
+          # IMAGE_TAG: 1.31.3-cd
+        run: |
+          aws ssm send-command \
+            --instance-ids "i-0ba28a7c5e7470ef2" \
+            --document-name "AWS-RunShellScript" \
+            --parameters "commands=[
+              \"sudo systemctl stop nginx || true\",
+              \"aws ecr get-login-password --region ap-northeast-1 | sudo docker login --username AWS --password-stdin 925047940866.dkr.ecr.ap-northeast-1.amazonaws.com\",
+              \"sudo docker stop nginx-container || true\",
+              \"sudo docker rm nginx-container || true\",
+              \"sudo docker pull 925047940866.dkr.ecr.ap-northeast-1.amazonaws.com/std01-nginx:latest\",
+              \"sudo docker run -d --name nginx-container -p 80:80 925047940866.dkr.ecr.ap-northeast-1.amazonaws.com/std01-nginx:latest\"
+            ]" \
+            --region "${{ secrets.AWS_REGION }}" \
+            --comment "Deploying Docker Nginx from ECR"
