@@ -48,9 +48,13 @@ jobs:
           docker push 925047940866.dkr.ecr.ap-northeast-1.amazonaws.com/std01-nginx:$IMAGE_TAG
           docker push 925047940866.dkr.ecr.ap-northeast-1.amazonaws.com/std01-nginx:latest
 
-      # SSM을 통해 Private EC2에 Docker 배포 명령 전달
-      # ECR의 latest 이미지를 Pull하여 실행
-      - name: Private EC2에 Docker 컨테이너 배포
+      # docker-compose.yaml 파일을 S3에 업로드
+      - name: Docker Compose 파일 S3 업로드
+        run: |
+          aws s3 cp docker-compose.yaml s3://std01-static-web-0914/docker-compose.yaml
+
+      # SSM을 통해 Private EC2에 Docker Compose 배포 명령 전달
+      - name: Private EC2에 Docker Compose 배포
         # env:
         #   ECR_REGISTRY: 925047940866.dkr.ecr.ap-northeast-1.amazonaws.com
         #   ECR_REPOSITORY: std01-nginx
@@ -62,10 +66,11 @@ jobs:
             --parameters "commands=[
               \"sudo systemctl stop nginx || true\",
               \"aws ecr get-login-password --region ap-northeast-1 | sudo docker login --username AWS --password-stdin 925047940866.dkr.ecr.ap-northeast-1.amazonaws.com\",
+              \"aws s3 cp s3://std01-static-web-0914/docker-compose.yaml /home/ec2-user/docker-compose.yaml\",
               \"sudo docker stop nginx-container || true\",
               \"sudo docker rm nginx-container || true\",
-              \"sudo docker pull 925047940866.dkr.ecr.ap-northeast-1.amazonaws.com/std01-nginx:latest\",
-              \"sudo docker run -d --name nginx-container -p 80:80 925047940866.dkr.ecr.ap-northeast-1.amazonaws.com/std01-nginx:latest\"
+              \"sudo docker compose -f /home/ec2-user/docker-compose.yaml pull\",
+              \"sudo docker compose -f /home/ec2-user/docker-compose.yaml up -d\"
             ]" \
             --region "${{ secrets.AWS_REGION }}" \
-            --comment "Deploying Docker Nginx from ECR"
+            --comment "Deploying Docker Compose from S3"
