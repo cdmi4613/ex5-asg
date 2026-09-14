@@ -61,7 +61,6 @@ jobs:
         #   IMAGE_TAG: latest
         run: |
           aws ssm send-command \
-            # --instance-ids "i-0ba28a7c5e7470ef2" \
             --document-name "AWS-RunShellScript" \
             --targets "Key=tag:Cicd,Values=asg" \
             --parameters "commands=[
