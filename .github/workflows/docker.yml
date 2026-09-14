@@ -50,10 +50,10 @@ jobs:
 
       # SSM을 통해 Private EC2에 Docker 배포 명령 전달
       - name: Private EC2에 Docker 컨테이너 배포
-        env:
-          # ECR_REGISTRY: 925047940866.dkr.ecr.ap-northeast-1.amazonaws.com
-          # ECR_REPOSITORY: std01-nginx
-          # IMAGE_TAG: 1.31.3-cd
+        # env:
+        #   ECR_REGISTRY: 925047940866.dkr.ecr.ap-northeast-1.amazonaws.com
+        #   ECR_REPOSITORY: std01-nginx
+        #   IMAGE_TAG: 1.31.3-cd
         run: |
           aws ssm send-command \
             --instance-ids "i-0ba28a7c5e7470ef2" \
