@@ -61,12 +61,13 @@ jobs:
         #   IMAGE_TAG: latest
         run: |
           aws ssm send-command \
-            --instance-ids "i-0ba28a7c5e7470ef2" \
+            # --instance-ids "i-0ba28a7c5e7470ef2" \
             --document-name "AWS-RunShellScript" \
+            --targets "Key=tag:Cicd,Values=asg" \
             --parameters "commands=[
               \"sudo systemctl stop nginx || true\",
-              \"aws ecr get-login-password --region ap-northeast-1 | sudo docker login --username AWS --password-stdin 925047940866.dkr.ecr.ap-northeast-1.amazonaws.com\",
-              \"aws s3 cp s3://std01-static-web-0914/docker-compose.yaml /home/ec2-user/docker-compose.yaml\",
+              \"sudo aws ecr get-login-password --region ap-northeast-1 | sudo docker login --username AWS --password-stdin 925047940866.dkr.ecr.ap-northeast-1.amazonaws.com\",
+              \"sudo aws s3 cp s3://std01-static-web-0914/docker-compose.yaml /home/ec2-user/docker-compose.yaml\",
               \"sudo docker stop nginx-container || true\",
               \"sudo docker rm nginx-container || true\",
               \"sudo docker compose -f /home/ec2-user/docker-compose.yaml pull\",
