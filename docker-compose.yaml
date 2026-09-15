@@ -25,6 +25,20 @@ services:
     #     aliases:
     #       - nginx
 
+
+  # FastAPI + Jinja2 컨테이너
+  fastapi:
+    # GitHub Actions에서 빌드하여 ECR에 올린 FastAPI 이미지
+    image: 925047940866.dkr.ecr.ap-northeast-1.amazonaws.com/std01-fastapi:latest
+
+    container_name: fastapi-container
+
+    ports:
+      - "8000:8000"
+
+    restart: always
+
+
 # networks:
 #   public-subnet:
 #     driver: bridge
