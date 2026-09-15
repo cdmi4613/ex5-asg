@@ -1,0 +1,27 @@
+# Nginx Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+
+spec:
+  # Nginx Pod 2개 실행
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: nginx
+
+  template:
+    metadata:
+      labels:
+        app: nginx
+
+    spec:
+      containers:
+        - name: nginx
+          # 기존 GitHub Actions에서 ECR에 Push한 이미지
+          image: 925047940866.dkr.ecr.ap-northeast-1.amazonaws.com/std01-nginx:latest
+
+          ports:
+            - containerPort: 80

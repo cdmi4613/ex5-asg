@@ -1,0 +1,35 @@
+# ALB Ingress - Path Routing
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: std01-ingress
+  annotations:
+    # AWS ALB 사용
+    alb.ingress.kubernetes.io/scheme: internet-facing
+
+    # Pod IP를 ALB Target으로 직접 등록
+    alb.ingress.kubernetes.io/target-type: ip
+
+spec:
+  ingressClassName: alb
+
+  rules:
+    - http:
+        paths:
+          # /api 요청 → FastAPI
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: fastapi-service
+                port:
+                  number: 8000
+
+          # 나머지 요청 → Nginx
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nginx-service
+                port:
+                  number: 80

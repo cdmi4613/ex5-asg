@@ -63,26 +63,67 @@ jobs:
 
           docker push 925047940866.dkr.ecr.ap-northeast-1.amazonaws.com/std01-fastapi:$IMAGE_TAG
 
-      # docker-compose.yaml 파일을 S3에 업로드
-      - name: Docker Compose 파일 S3 업로드
-        run: |
-          aws s3 cp docker-compose.yaml \
-            s3://std01-static-web-0914/docker-compose.yaml
 
-      # SSM을 통해 Private EC2에 Docker Compose 배포 명령 전달
-      - name: Private EC2에 Docker Compose 배포
+      # ============================================================
+      # 기존 ASG + Docker Compose 배포 방식
+      # 현재는 EKS 배포를 사용하므로 주석 처리
+      #
+      # 나중에 ASG 방식으로 다시 배포하려면
+      # 아래 부분의 주석을 해제하고 EKS 부분을 주석 처리
+      # ============================================================
+
+      # # docker-compose.yaml 파일을 S3에 업로드
+      # - name: Docker Compose 파일 S3 업로드
+      #   run: |
+      #     aws s3 cp docker-compose.yaml \
+      #       s3://std01-static-web-0914/docker-compose.yaml
+
+      # # SSM을 통해 Private EC2에 Docker Compose 배포 명령 전달
+      # - name: Private EC2에 Docker Compose 배포
+      #   run: |
+      #     aws ssm send-command \
+      #       --document-name "AWS-RunShellScript" \
+      #       --targets "Key=tag:Cicd,Values=asg" \
+      #       --parameters "commands=[
+      #         \"sudo systemctl stop nginx || true\",
+      #         \"sudo aws ecr get-login-password --region ap-northeast-1 | sudo docker login --username AWS --password-stdin 925047940866.dkr.ecr.ap-northeast-1.amazonaws.com\",
+      #         \"sudo aws s3 cp s3://std01-static-web-0914/docker-compose.yaml /home/ec2-user/docker-compose.yaml\",
+      #         \"sudo docker stop nginx-container || true\",
+      #         \"sudo docker rm nginx-container || true\",
+      #         \"sudo docker compose -f /home/ec2-user/docker-compose.yaml pull\",
+      #         \"sudo docker compose -f /home/ec2-user/docker-compose.yaml up -d\"
+      #       ]" \
+      #       --region "${{ secrets.AWS_REGION }}" \
+      #       --comment "Deploying Docker Compose from S3"
+
+
+      # ============================================================
+      # EKS 배포 방식
+      # GitHub Actions → EKS → Kubernetes Deployment
+      # ============================================================
+
+      # GitHub Actions에서 EKS Cluster에 접속할 수 있도록 kubeconfig 생성
+      - name: EKS kubeconfig 설정
         run: |
-          aws ssm send-command \
-            --document-name "AWS-RunShellScript" \
-            --targets "Key=tag:Cicd,Values=asg" \
-            --parameters "commands=[
-              \"sudo systemctl stop nginx || true\",
-              \"sudo aws ecr get-login-password --region ap-northeast-1 | sudo docker login --username AWS --password-stdin 925047940866.dkr.ecr.ap-northeast-1.amazonaws.com\",
-              \"sudo aws s3 cp s3://std01-static-web-0914/docker-compose.yaml /home/ec2-user/docker-compose.yaml\",
-              \"sudo docker stop nginx-container || true\",
-              \"sudo docker rm nginx-container || true\",
-              \"sudo docker compose -f /home/ec2-user/docker-compose.yaml pull\",
-              \"sudo docker compose -f /home/ec2-user/docker-compose.yaml up -d\"
-            ]" \
+          aws eks update-kubeconfig \
             --region "${{ secrets.AWS_REGION }}" \
-            --comment "Deploying Docker Compose from S3"
+            --name std01-eks-cluster
+
+      # Kubernetes YAML 적용
+      # Deployment / Service / Ingress 설정을 EKS에 반영
+      - name: Kubernetes 리소스 적용
+        run: |
+          kubectl apply -f k8s/
+
+      # latest 이미지가 ECR에 새로 Push되어도
+      # 기존 Pod는 자동으로 재생성되지 않으므로 Deployment 재시작
+      - name: EKS 새 이미지 배포
+        run: |
+          kubectl rollout restart deployment/nginx-deployment
+          kubectl rollout restart deployment/fastapi-deployment
+
+      # 새 Pod가 정상적으로 배포될 때까지 확인
+      - name: EKS 배포 상태 확인
+        run: |
+          kubectl rollout status deployment/nginx-deployment --timeout=180s
+          kubectl rollout status deployment/fastapi-deployment --timeout=180s
